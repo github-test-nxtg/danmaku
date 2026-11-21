@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>弾幕よけゲーム</title>
+<style>
+:root{--bg:#0b0b1a;--fg:#e8e8ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0b0b1a;--fg:#e8e8ff}}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;user-select:none}
+canvas{max-width:100%;max-height:calc(100% - 28px);aspect-ratio:480/640;background:#05050f;border:1px solid #334;touch-action:none}
+p{margin:6px 0 0;font-size:12px;opacity:.7}
+</style>
+</head>
+<body>
+<canvas id="c" width="480" height="640"></canvas>
+<p>移動：矢印/WASD・ドラッグ　Shift：低速　Rでリスタート</p>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d'),W=480,H=640;
+let P,B,t,over,best=0,state='title',keys={},shake=0;
+function reset(){P={x:W/2,y:H-90,r:3};B=[];t=0;over=false;}
+reset();
+function shoot(x,y,a,s,c,r=4){B.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,c,r});}
+function ring(x,y,n,s,off,c){for(let i=0;i<n;i++)shoot(x,y,off+i/n*Math.PI*2,s,c);}
+function aim(x,y){return Math.atan2(P.y-y,P.x-x);}
+let bx=W/2,by=90;
+function spawn(f){
+  const sec=f/60, lv=Math.min(5,1+Math.floor(sec/15));
+  bx=W/2+Math.sin(f/90)*140; by=90+Math.sin(f/50)*20;
+  if(f%(70-lv*6)==0) ring(bx,by,12+lv*3,1.6+lv*.15,f*.05,'#6cf');
+  if(f%5==0) shoot(bx,by,f*.13,2.2,'#f6c');
+  if(lv>=2&&f%(50-lv*4)==0){const a=aim(bx,by);for(let i=-2;i<=2;i++)shoot(bx,by,a+i*.18,3+lv*.2,'#fd5',3);}
+  if(lv>=3&&f%4==0) shoot(bx,by,-f*.21,2.4,'#8f8');
+  if(lv>=4&&f%90==0){for(let i=0;i<W;i+=40)shoot(i+(f%80),0,Math.PI/2,2.2,'#f85',5);}
+  if(lv>=5&&f%3==0) shoot(bx,by,f*.37+Math.sin(f*.1),2.8,'#b8f',3);
+}
+let atk='',aimA=0;
+const NAMES=['雨','時限爆弾','バウンド','壁','加速フラワー','ホーミング','二重らせん','クロスレーザー','リング弾','自機狙い','渦巻き','格子'];
+const ORDER=[8,9,10,0,11,2,1,5,3,4,6,7];
+function spawn2(f){
+  const st=0; bx=W/2+Math.sin(f/90)*140; by=90+Math.sin(f/50)*20;
+  const n=ORDER.length, idx=ORDER[Math.floor((f-st)/600)%n], lf=(f-st)%600;
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const hard=1+Math.floor((f-st)/(600*n))*.3;
+  atk=NAMES[idx];
+  if(lf<60)return;
+  if(idx==8&&lf%Math.round(45/hard)==0) ring(bx,by,16+Math.floor(hard*4),2,lf*.1,'#6cf');
+  if(idx==9&&lf%30==0){const a=aim(bx,by);for(let i=-2;i<=2;i++)shoot(bx,by,a+i*.18,3.2,'#fd5',3);}
+  if(idx==10&&lf%4==0) shoot(bx,by,lf*.13,2.4,'#f6c');
+  if(idx==11&&lf%90==0){for(let i=0;i<W;i+=40)shoot(i+(lf%80),0,Math.PI/2,2.2,'#f85',5);}
+  if(idx==0&&f%Math.max(3,Math.round(6/hard))==0) shoot(rnd(0,W),0,Math.PI/2+rnd(-.15,.15),rnd(2.5,4.2),'#8cf',3);
+  if(idx==1&&lf%60==0){shoot(bx,by,aim(bx,by)+rnd(-.4,.4),2,'#fa4',8);const b=B[B.length-1];b.split=45;b.n=14;}
+  if(idx==2&&lf%12==0){shoot(bx,by,rnd(.3,Math.PI-.3),2.6,'#4fd',4);B[B.length-1].bn=2;}
+  if(idx==3&&lf%75==0){const gap=Math.floor(rnd(2,H/30-4)),dir=Math.random()<.5;for(let i=0;i<H/30;i++){if(i>=gap&&i<gap+4)continue;shoot(dir?0:W,i*30,dir?0:Math.PI,2.1,'#f66',5);}}
+  if(idx==4&&lf%40==0){const o=Math.random()*6;for(let i=0;i<18;i++)shoot(bx,by,o+i/18*Math.PI*2,.8,'#fbf',4),B[B.length-1].acc=1.025;}
+  if(idx==5&&lf%40==0){shoot(bx,by,aim(bx,by),2,'#ff8',5);B[B.length-1].home=110;}
+  if(idx==6&&lf%3==0){shoot(bx,by,lf*.2,2.6,'#6cf',3);shoot(bx,by,lf*.2+Math.PI,2.6,'#f6c',3);shoot(bx,by,-lf*.14,2.2,'#fd5',3);}
+  if(idx==7){const ph=lf%160;if(ph<60){if(ph==0)aimA=aim(bx,by);if(ph>=20&&ph%2==0)shoot(bx,by,aimA,5.5,'#fff',3);if(ph<20&&ph%4==0){shoot(bx,by,aimA,.01,'rgba(255,80,80,.4)',2);B[B.length-1].life=12;}}}
+}
+function update(){
+  const sp=keys.Shift?1.8:4;
+  let dx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0);
+  let dy=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
+  if(dx&&dy){dx*=.707;dy*=.707;}
+  P.x=Math.max(8,Math.min(W-8,P.x+dx*sp));P.y=Math.max(8,Math.min(H-8,P.y+dy*sp));
+  spawn2(t);t++;
+  for(const b of B){
+    if(b.home>0){b.home--;const a=aim(b.x,b.y);b.vx+=Math.cos(a)*.05;b.vy+=Math.sin(a)*.05;const s=Math.hypot(b.vx,b.vy);if(s>2.6){b.vx*=2.6/s;b.vy*=2.6/s;}}
+    if(b.acc&&Math.hypot(b.vx,b.vy)<4.2){b.vx*=b.acc;b.vy*=b.acc;}
+    b.x+=b.vx;b.y+=b.vy;
+    if(b.bn>0&&(b.x<0||b.x>W)){b.vx*=-1;b.x=Math.max(0,Math.min(W,b.x));b.bn--;}
+    if(b.split&&--b.split==0){ring(b.x,b.y,b.n||12,2,Math.random(),'#fa4');b.dead=true;}
+    const d=Math.hypot(b.x-P.x,b.y-P.y);
+    if(!b.dead&&d<b.r+P.r&&b.vx*b.vx+b.vy*b.vy>.001){over=true;shake=12;best=Math.max(best,t);state='over';}
+  }
+  B=B.filter(b=>!b.dead&&b.x>-20&&b.x<W+20&&b.y>-20&&b.y<H+20&&!(b.life&&--b.life<=0));
+}
+function draw(){
+  g.save();
+  if(shake>0){g.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake--;}
+  g.fillStyle='rgba(5,5,15,.85)';g.fillRect(-20,-20,W+40,H+40);
+  // boss
+  g.fillStyle='#a4f';g.beginPath();g.arc(bx,by,16,0,7);g.fill();
+  g.strokeStyle='#fff';g.lineWidth=2;g.stroke();
+  for(const b of B){g.fillStyle=b.c;g.beginPath();g.arc(b.x,b.y,b.r,0,7);g.fill();
+    g.strokeStyle='rgba(255,255,255,.8)';g.lineWidth=1;g.stroke();}
+  // player
+  if(!over||shake>0){
+    g.fillStyle='#fff';g.beginPath();g.moveTo(P.x,P.y-12);g.lineTo(P.x+8,P.y+8);g.lineTo(P.x-8,P.y+8);g.closePath();g.fill();
+    g.fillStyle='#f33';g.beginPath();g.arc(P.x,P.y,P.r+1,0,7);g.fill();
+  }
+  g.fillStyle='#e8e8ff';g.font='16px system-ui';g.textAlign='left';
+  g.fillText('TIME '+(t/60).toFixed(1)+'s',10,24);
+  g.textAlign='right';g.fillText('BEST '+(best/60).toFixed(1)+'s',W-10,24);
+  if(atk&&state==='play'){g.textAlign='center';g.fillStyle='#ffd866';g.fillText('攻撃：'+atk,W/2,24);}
+  g.textAlign='center';
+  if(state==='title'){g.font='bold 34px system-ui';g.fillText('弾幕よけゲーム',W/2,H/2-20);
+    g.font='16px system-ui';g.fillText('赤い点が当たり判定。タップ/Enterで開始',W/2,H/2+20);}
+  if(state==='over'){g.font='bold 34px system-ui';g.fillText('GAME OVER',W/2,H/2-20);
+    g.font='18px system-ui';g.fillText((t/60).toFixed(1)+' 秒生存',W/2,H/2+16);
+    g.fillText('タップ / R でリトライ',W/2,H/2+46);}
+  g.restore();
+}
+function loop(){
+  if(state==='play')update();
+  draw();requestAnimationFrame(loop);
+}
+function start(){reset();state='play';}
+addEventListener('keydown',e=>{keys[e.key.length==1?e.key.toLowerCase():e.key]=true;
+  if(e.key.startsWith('Arrow'))e.preventDefault();
+  if((e.key==='Enter'||e.key==='r'||e.key==='R')&&state!=='play')start();});
+addEventListener('keyup',e=>{keys[e.key.length==1?e.key.toLowerCase():e.key]=false;if(e.key==='Shift')keys.Shift=false;});
+let last=null;
+cv.addEventListener('pointerdown',e=>{if(state!=='play'){start();}last={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>{
+  if(!last||state!=='play')return;
+  const k=W/cv.getBoundingClientRect().width;
+  P.x=Math.max(8,Math.min(W-8,P.x+(e.clientX-last.x)*k));
+  P.y=Math.max(8,Math.min(H-8,P.y+(e.clientY-last.y)*k));
+  last={x:e.clientX,y:e.clientY};});
+cv.addEventListener('pointerup',()=>last=null);
+loop();
+</script>
+</body>
+</html>
